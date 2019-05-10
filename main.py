@@ -1,16 +1,28 @@
 ############################################################ BIBLIOTECAS
+import os
 import gym
 import random
 import copy
+import matplotlib
+import matplotlib.pyplot as plt
+
+
 
 ###################################################### VARIÁVEIS GLOBAIS
-NUM_GERACOES = 50
-NUM_ENTES = 40
-NUM_GENES = 1000
-NUM_CAMPEOES = 20 #NUMERO PAR, não pode ser maior que a metade da populacao (NUM_ENTES)
-PROB_MUTACAO = 10
+NUM_GERACOES = 500
+NUM_ENTES = 500
+MAX_NUM_GENES = 25
+MIN_NUM_GENES = 5
+NUM_PASSOS = 500
+NUM_CAMPEOES = 10
+PROB_MUTACAO = 40
 
 populacao = []
+serieAptxGer = []
+
+max_aptidao = 0
+
+matplotlib.use('Agg')
 env = gym.make('BipedalWalker-v2')
 
 
@@ -26,22 +38,47 @@ def converte_gene_in_action(gene):
 	return [gene.a, gene.t, gene.g, gene.c]	
 
 def faz_cruzamento(ente1, ente2):
-	novoEnte1 = ente1.copy()
-	novoEnte2 = ente2.copy()
-	crossoverPoint = round(random.uniform(0, 1) * NUM_GENES)
-	for i in range(NUM_GENES):
-		if i > crossoverPoint:
-			aux = novoEnte1.dna.genes[i]
-			novoEnte1.dna.genes[i] = novoEnte2.dna.genes[i]
-			novoEnte2.dna.genes[i] = aux
+	novoEnte = ente1.copy()
+	novoEnte.dna.genes = []
+
+	novo_comprimento = round(random.uniform(MIN_NUM_GENES, MAX_NUM_GENES))
+	
+	crossoverPoint = round(random.uniform(0, 1) * novo_comprimento)
+	
+	for i in range(novo_comprimento):
+		if i < crossoverPoint and i < len(ente1.dna.genes) and i < len(ente2.dna.genes):
+			novoEnte.dna.genes.append(copy.deepcopy(ente1.dna.genes[i]))
+		elif i >= crossoverPoint and i < len(ente1.dna.genes) and i < len(ente2.dna.genes):
+			novoEnte.dna.genes.append(copy.deepcopy(ente2.dna.genes[i]))
+		elif i < len(ente1.dna.genes):
+			novoEnte.dna.genes.append(copy.deepcopy(ente1.dna.genes[i]))
+		elif i < len(ente2.dna.genes):
+			novoEnte.dna.genes.append(copy.deepcopy(ente2.dna.genes[i]))
+		else:	
+			novoEnte.dna.genes.append(Gene(random_action(), random_action(), random_action(), random_action()))
+
 		if random.uniform(0, 100) < PROB_MUTACAO:
-			novoEnte1.dna.genes[i] = Gene(random_action(), random_action(), random_action(), random_action())
-			novoEnte2.dna.genes[i] = Gene(random_action(), random_action(), random_action(), random_action())
+			novoEnte.dna.genes[i] = Gene(random_action(), random_action(), random_action(), random_action())
 
-	return novoEnte1, novoEnte2
+		novoEnte.fit = 0
 
-def calc_fitness(totalReward):
-	return totalReward
+	return novoEnte
+
+def selecao(populacao):
+	somaTotal = 0
+	delta = abs(populacao[-1].fit)
+	
+	for ente in populacao:
+		somaTotal += ente.fit + delta
+
+	candidato = random.uniform(0, somaTotal)
+
+	somaTotal = 0
+	for ente in populacao:
+		somaTotal += ente.fit + delta
+		if somaTotal >= candidato:
+			return ente
+
 
 ################################################## DEFINIÇÕES DE CLASSES
 class Gene:
@@ -73,7 +110,7 @@ class Gene:
 		return Gene(self.a, self.t, self.g, self.c, self.f)
 
 class DNA:
-	num_genes = NUM_GENES
+	num_genes = round(random.uniform(MIN_NUM_GENES, MAX_NUM_GENES))
 
 	def __init__(self, genes = None):
 		if genes is None:
@@ -94,13 +131,13 @@ class DNA:
 
 class Ente:
 
-	def __init__(self, dna = None):
+	def __init__(self, dna = None, fit = None):
 		if dna is None:
 			self.setDNA(DNA())
 			self.fit = 0
 		else:
 			self.setDNA(dna)
-			self.fit = 0
+			self.fit = fit
 
 	def setDNA(self, dna):
 		self.dna = dna
@@ -109,7 +146,7 @@ class Ente:
 		self.fit = fit
 
 	def copy(self):
-		return Ente(self.dna.copy())
+		return Ente(self.dna.copy(), self.fit.copy())
 		
 
 ######################################################### LAÇO PRINCIPAL
@@ -118,64 +155,87 @@ class Ente:
 #inicio as variáveis
 cria_populacao(NUM_ENTES)
 
+superCampeao = None
+
 #calculo a aptidão de cada ente
 for g in range(NUM_GERACOES):
-
-	print('GERAÇÃO ', g)
 
 	i = 0
 	for ente in populacao:
 
-		i = i + 1
-		print('\tENTE:', i, 'APITIDÃO:', ente.fit)
+		i+=1
 
-		if ente.fit == 0:
+		env.reset()
 
-			env.reset()
-			totalReward = 0
-			for gene in ente.dna.genes:
-				#env.render()
-				action = converte_gene_in_action(gene)	
-				observation, reward, done, info = env.step(action)
-				gene.setFenotipo(reward)
-				if reward > 0:
-					totalReward = totalReward + 1
-			ente.setFitness(calc_fitness(totalReward))
-			#print('\t   NOVA APITIDÃO:', ente.fit)
+		totalReward = 0
+		for passo in range(NUM_PASSOS):
+			#env.render()
+			gene = ente.dna.genes[passo % len(ente.dna.genes)]
+			action = converte_gene_in_action(gene)	
+			observation, reward, done, info = env.step(action)
+			totalReward += reward
+			if done:
+				break
+		ente.setFitness(totalReward)
 
-		else:
-			#print('\t   JÁ FOI EXPERIMENTADO.')
-			continue
+		#imprime os resultados parciais
+		os.system('clear')
+		print("%11s %11s %20s %16s" % ('| GERAÇÃO |', 'INDIVÍDUO |', 'APTIDÃO INDIVIDUAL |', 'MELHOR APTIDÃO |'))
+		print("| %3d/%3d | %4d/%5d | %18f | %14f |" % ((g+1), NUM_GERACOES, i, NUM_ENTES, totalReward, max_aptidao))
+
 
 	#escolho os N mais aptos
 	#ordena entes por maior apitidã(o
 	populacao.sort(key=lambda e: e.fit, reverse=True)
 
+	if superCampeao == None:
+		superCampeao = populacao[0].copy()
+	elif superCampeao.fit < populacao[0].fit:
+		superCampeao = populacao[0].copy()
+
+	#adiciona um valor à série Aptidão x Geração para gerar o gráfico no final
+	max_aptidao = superCampeao.fit
+	serieAptxGer.append(max_aptidao)
+
+	#nova geracao
+	nova_geracao = []
+
+	#seleciona os candidatos a transmitir seus genes
+	for _ in range(NUM_CAMPEOES):
+		candidato1 = selecao(populacao)
+		candidato2 = selecao(populacao)
+
+		filho = faz_cruzamento(candidato1, candidato2)
+
+		nova_geracao.append(filho)
+
+
 	#elimina os mais fracos, abrindo espaço para os novos entes
-	del populacao[-NUM_CAMPEOES:]
+	del populacao[-len(nova_geracao):]
+	populacao.extend(nova_geracao)
 
-	#pega os primeiros N mais aptos
-	it = iter(populacao[:NUM_CAMPEOES])
-	for campeao in it:
-
-		#faço cruzamento do DNA deles
-		filho1, filho2 = faz_cruzamento(campeao, next(it))
-
-		#coloco o resultado do cruzamento no lugar dos menos aptos
-		populacao.append(filho1)
-		populacao.append(filho2)
-		
+	
 #repita o processo por N gerações
+
+
+#imprime o gráfico de evolução
+plt.plot(serieAptxGer)
+plt.ylabel('Aptidão')
+plt.xlabel('Geração')
+plt.savefig('aptxger')
 
 #exibe o comportamento do ganhador
 populacao.sort(key=lambda e: e.fit, reverse=True)
-input("PREPARADO PARA VER O GANHADOR?\nPressione qualquer tecla para continuar ...")
-env.reset()
-ente = populacao[0]
-for gene in ente.dna.genes:
-	env.render()
-	action = converte_gene_in_action(gene)	
-	observation, reward, done, info = env.step(action)
+key = None 
+while key != 'N':		
+	input("\n\nPREPARADO PARA VER O GANHADOR? [S/N]")
+	env.reset()
+	ente = superCampeao
+	for passo in range(NUM_PASSOS):
+		gene = ente.dna.genes[passo % len(ente.dna.genes)]
+		env.render()
+		action = converte_gene_in_action(gene)	
+		observation, reward, done, info = env.step(action)
 
 env.close()
 
