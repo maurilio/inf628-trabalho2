@@ -9,13 +9,14 @@ import matplotlib.pyplot as plt
 
 
 ###################################################### VARIÁVEIS GLOBAIS
-NUM_GERACOES = 500
+NUM_GERACOES = 50
 NUM_ENTES = 500
-MAX_NUM_GENES = 25
-MIN_NUM_GENES = 5
-NUM_PASSOS = 500
+MAX_NUM_GENES = 35
+MIN_NUM_GENES = 15
+NUM_PASSOS = 300
 NUM_CAMPEOES = 10
-PROB_MUTACAO = 40
+NUM_FILHOS = 10
+PROB_MUTACAO = 60
 
 populacao = []
 serieAptxGer = []
@@ -66,15 +67,15 @@ def faz_cruzamento(ente1, ente2):
 
 def selecao(populacao):
 	somaTotal = 0
-	delta = abs(populacao[-1].fit)
+	delta = abs(populacao[NUM_CAMPEOES-1].fit)
 	
-	for ente in populacao:
+	for ente in populacao[:NUM_CAMPEOES]:
 		somaTotal += ente.fit + delta
 
 	candidato = random.uniform(0, somaTotal)
 
 	somaTotal = 0
-	for ente in populacao:
+	for ente in populacao[:NUM_CAMPEOES]:
 		somaTotal += ente.fit + delta
 		if somaTotal >= candidato:
 			return ente
@@ -157,7 +158,7 @@ cria_populacao(NUM_ENTES)
 
 superCampeao = None
 
-#calculo a aptidão de cada ente
+#calcula a aptidão de cada ente
 for g in range(NUM_GERACOES):
 
 	i = 0
@@ -181,7 +182,7 @@ for g in range(NUM_GERACOES):
 		#imprime os resultados parciais
 		os.system('clear')
 		print("%11s %11s %20s %16s" % ('| GERAÇÃO |', 'INDIVÍDUO |', 'APTIDÃO INDIVIDUAL |', 'MELHOR APTIDÃO |'))
-		print("| %3d/%3d | %4d/%5d | %18f | %14f |" % ((g+1), NUM_GERACOES, i, NUM_ENTES, totalReward, max_aptidao))
+		print("| %3d/%3d | %4d/%4d | %18f | %14f |" % ((g+1), NUM_GERACOES, i, NUM_ENTES, totalReward, max_aptidao))
 
 
 	#escolho os N mais aptos
@@ -201,7 +202,7 @@ for g in range(NUM_GERACOES):
 	nova_geracao = []
 
 	#seleciona os candidatos a transmitir seus genes
-	for _ in range(NUM_CAMPEOES):
+	for _ in range(NUM_FILHOS):
 		candidato1 = selecao(populacao)
 		candidato2 = selecao(populacao)
 
@@ -227,15 +228,16 @@ plt.savefig('aptxger')
 #exibe o comportamento do ganhador
 populacao.sort(key=lambda e: e.fit, reverse=True)
 key = None 
+env.reset()
+ente = superCampeao
+passo = 0
+key = input("\n\nPREPARADO PARA VER O GANHADOR? [S/N] \n\n USE CTRL+C PARA CANCELAR")
 while key != 'N':		
-	input("\n\nPREPARADO PARA VER O GANHADOR? [S/N]")
-	env.reset()
-	ente = superCampeao
-	for passo in range(NUM_PASSOS):
-		gene = ente.dna.genes[passo % len(ente.dna.genes)]
-		env.render()
-		action = converte_gene_in_action(gene)	
-		observation, reward, done, info = env.step(action)
+	gene = ente.dna.genes[passo % len(ente.dna.genes)]
+	env.render()
+	action = converte_gene_in_action(gene)	
+	observation, reward, done, info = env.step(action)
+	passo += 1
 
 env.close()
 
